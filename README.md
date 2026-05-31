@@ -1,34 +1,59 @@
-# ByT5-Sanskrit Analyzers
+# ByT5-Sanskrit Analyzer 
 
-This repository contains inference scripts for ByT5-Sanskrit analyzers developed for our EMNLP submission. The analyzer capabilities can be accessed in an interactive application at [dharmamitra.org](http://dharmamitra.org). The finetuning data for these models is taken from the [DCS](http://www.sanskrit-linguistics.org/dcs/).  
+This repository holds code for training and inference based on the ByT5-Sanskrit model as described in this paper: XXX  
 
-## Python Package
-For those of you who do not want to run the model locally but just need a quick, working solution in python there is [this package](https://pypi.org/project/dharmamitra-sanskrit-grammar/).  
+## Data Source
 
-## Models
-The pretrained base model is available here: [Huggingface link](https://huggingface.co/buddhist-nlp/byt5-sanskrit)  
-The finetuned multitask model: [Huggingface link](https://huggingface.co/chronbmm/sanskrit5-multitask)
+The training data for this model has been taken from the Digital Corpus of Sanskrit (DCS):
 
-## Repository Structure
+[http://www.sanskrit-linguistics.org/dcs/](http://www.sanskrit-linguistics.org/dcs/)
 
-Our project is organized into three main directories. Currently, we make the applications/ section available, we will add the training and data sections in the future. 
+The pretraining data was taken from the [Sangraha dataset](https://huggingface.co/datasets/ai4bharat/sangraha) by AI4Bharat.
 
-- `applications/`: Contains various inference scripts for applying our model.
+## Training
 
-## Getting Started
+The training code is described in training/.   
 
-For instructions how to run the individual downstream applications, see the README.md files in the subfolders under applications/. 
+## Inference
 
+- Supports multiple processing modes:
+  - Segmentation
+  - Segmentation with morphosyntactic analysis
+  - Lemmatization
+  - Lemmatization with morphosyntactic analysis
+  - Segmentation, lemmatization, and morphosyntactic analysis combined
 
-## Citation
-The preprint is available on [arxiv](https://arxiv.org/abs/2409.13920). 
-If you like our work and use it in your research, feel free to cite the paper:
-```
-@inproceedings{
-nehrdichetal2024,
-title={One Model is All You Need: ByT5-Sanskrit, a Unified Model for Sanskrit {NLP} Tasks},
-author={Nehrdich, Sebastian and Hellwig, Oliver and Keutzer, Kurt},
-booktitle={Findings of the 2024 Conference on Empirical Methods in Natural Language Processing},
-year={2024},
-}
-```
+## Requirements for Inference
+
+- Python 3.6+
+- PyTorch
+- Transformers
+- tqdm
+- pandas
+
+You can install these requirements with pip: `pip install torch transformers tqdm pandas`.  
+
+### Inference Arguments (run_inf.py)
+
+- `--input-file`: Path to the input file containing Sanskrit text (required)
+- `--mode`: Processing mode (required)
+  - Choices: 'lemma', 'lemma-morphosyntax', 'segmentation', 'segmentation-morphosyntax', 'segmentation-lemma-morphosyntax'
+- `--output-file`: Path to the output file (required)
+- `--output-mode`: Output format (optional, default: 'txt')
+  - Choices: 'txt' (plain text), 'tsv' (tab-separated values)
+- `--batch-size`: Batch size for processing (optional, default: 20)
+
+### Inference Examples
+
+1. Segmentation:
+
+`python run_inf.py --mode segmentation --input-file examples/toy-skt.txt  --output-file examples/toy-skt-segmented.txt`
+
+2. Lemmatization with morphosyntactic analysis in TSV format:
+
+`python run_inf.py --mode lemma-morphosyntax --input-file examples/toy-skt.txt  --output-file examples/toy-skt-analyzed.tsv --output-mode tsv`
+
+## Inference Output
+
+- For 'txt' output mode: Each processed sentence is written on a new line in the output file.
+- For 'tsv' output mode: The output is a tab-separated file with columns for segment number, original text, and analyzed text. 

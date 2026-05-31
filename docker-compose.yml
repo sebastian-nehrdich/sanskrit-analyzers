@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+    image: ${IMAGE_NAME:-sanskrit-byt5-analyzer}
+    environment:
+      APP_PORT: ${APP_PORT:-3415}
+      HOST_APP_PORT: ${HOST_APP_PORT:-3415}
+      CTRANSLATE_DEVICE: ${CTRANSLATE_DEVICE:-cuda}
+      CTRANSLATE_DEVICE_INDEX: ${CTRANSLATE_DEVICE_INDEX:-0}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      UVICORN_RELOAD: ${UVICORN_RELOAD:-}
+      FASTAPI_ROOT_PATH: ${FASTAPI_ROOT_PATH:-}
+    ports:
+      - "${HOST_APP_PORT:-3415}:${APP_PORT:-3415}"
+    depends_on:
+      - elasticsearch
+    runtime: nvidia
+    volumes:
+      - .:/app
+    networks:
+      - sanskrit-net
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+      - ingest.geoip.downloader.enabled=false
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - sanskrit-net
+
+volumes:
+  es-data:
+
+networks:
+  sanskrit-net:
+    driver: bridge
