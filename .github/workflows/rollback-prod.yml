@@ -1,0 +1,72 @@
+name: "Rollback Production"
+
+# Manually triggered rollback.
+# Re-tags a previous image as :prod for the production deploy to pick up.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to rollback to (e.g. prod-previous, prod-20260112-153045, staging-2026-01-12-1530-abc12345)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: production  # Requires approval.
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Lower-case image name
+        id: img
+        run: echo "name=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull target image
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ inputs.tag }}
+
+      - name: Get current timestamp
+        id: timestamp
+        run: echo "NOW=$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
+
+      - name: Save current prod before rollback
+        run: |
+          if docker pull ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod; then
+            docker tag \
+              ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod \
+              ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod-pre-rollback-${{ steps.timestamp.outputs.NOW }}
+            docker push ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod-pre-rollback-${{ steps.timestamp.outputs.NOW }}
+            echo "Saved current :prod as :prod-pre-rollback-${{ steps.timestamp.outputs.NOW }}"
+          else
+            echo "No existing :prod image found"
+          fi
+
+      - name: Tag and push as production
+        run: |
+          docker tag \
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ inputs.tag }} \
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod
+          docker push ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod
+
+      - name: Summary
+        run: |
+          {
+            echo "## Production Rollback Complete"
+            echo
+            echo "**Rolled back to:** \`${{ inputs.tag }}\`"
+            echo "**Pre-rollback image saved as:** \`prod-pre-rollback-${{ steps.timestamp.outputs.NOW }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

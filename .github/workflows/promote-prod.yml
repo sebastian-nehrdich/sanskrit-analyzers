@@ -1,0 +1,88 @@
+name: "Promote to Production"
+
+# Manually triggered, requires approval.
+# Re-tags :staging as :prod for the production deploy to pick up.
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_tag:
+        description: 'Specific staging tag to promote (leave empty for :staging latest)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production  # Requires approval. Configure in repo Settings -> Environments.
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Lower-case image name
+        id: img
+        run: echo "name=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine source image
+        id: source
+        run: |
+          if [ -n "${{ inputs.staging_tag }}" ]; then
+            echo "tag=${{ inputs.staging_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=staging" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save current prod as prod-previous
+        run: |
+          if docker pull ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod; then
+            docker tag \
+              ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod \
+              ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod-previous
+            docker push ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod-previous
+            echo "Saved current :prod as :prod-previous"
+          else
+            echo "No existing :prod image found, skipping backup"
+          fi
+
+      - name: Pull staging image
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ steps.source.outputs.tag }}
+
+      - name: Get current timestamp
+        id: timestamp
+        run: echo "NOW=$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
+
+      - name: Tag and push as production
+        run: |
+          docker tag \
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ steps.source.outputs.tag }} \
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod
+
+          docker tag \
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ steps.source.outputs.tag }} \
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod-${{ steps.timestamp.outputs.NOW }}
+
+          docker push ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod
+          docker push ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:prod-${{ steps.timestamp.outputs.NOW }}
+
+      - name: Summary
+        run: |
+          {
+            echo "## Production Promotion Complete"
+            echo
+            echo "**Promoted:** \`${{ steps.source.outputs.tag }}\` -> \`prod\`"
+            echo "**Rollback tag:** \`prod-previous\`"
+            echo "**Timestamped tag:** \`prod-${{ steps.timestamp.outputs.NOW }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
