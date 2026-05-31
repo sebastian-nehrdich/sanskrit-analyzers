@@ -1,0 +1,70 @@
+name: "Build Staging"
+
+# Builds the Dockerfile on push to main and publishes to GHCR as :staging.
+# The image contains code + Python deps but NOT model weights or data corpora
+# (bn/, ctranslate/, pali-segments/, samgraha/, sanskrit-texts/, data/* are
+# gitignored). Deploy hosts mount the model dirs at runtime.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Lower-case image name
+        id: img
+        run: echo "name=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Get current date
+        id: timestamp
+        run: echo "NOW=$(date +'%Y-%m-%d-%H%M')" >> "$GITHUB_OUTPUT"
+
+      - name: Get short SHA
+        id: short_sha
+        run: echo "SHA=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:staging
+            ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:staging-${{ steps.timestamp.outputs.NOW }}-${{ steps.short_sha.outputs.SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "## Staging Build Complete"
+            echo
+            echo "**Image:** \`${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:staging\`"
+            echo "**Commit:** \`${{ github.sha }}\`"
+            echo
+            echo "**Note:** The image does NOT contain model weights or data corpora. The deploy host must mount the model dirs (\`bn/\`, \`ctranslate/\`, large files under \`data/\`) at runtime."
+          } >> "$GITHUB_STEP_SUMMARY"

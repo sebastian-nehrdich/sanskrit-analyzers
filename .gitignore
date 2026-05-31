@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Local config / secrets
+.env
+.env.local
+*.log
+.pytest_cache/
+
+# Emacs / editor lock files and backups
+\#*\#
+.\#*
+*~
+
+# Model weights and data corpora — these live on the deploy host and are
+# mounted at runtime, not committed to git.
+# (See README on how to obtain them.)
+/bn/
+/ctranslate/
+/pali-segments/
+/samgraha/
+/sanskrit-texts/
+/data/*
+!/data/sanskrit_tags.tsv
+
+# Model weight file extensions (defensive)
+*.bin
+*.pt
+*.ckpt
+*.onnx
+*.safetensors
